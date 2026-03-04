@@ -17,28 +17,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install Zeus CLI
-        run: npm install -g @zeppos/zeus-cli
-
-      # Restore Zeus session from saved config (see README for how to generate ZEUS_CONFIG)
-      - name: Restore Zeus credentials
-        run: |
-          mkdir -p ~/.zeus
-          echo "${{ secrets.ZEUS_CONFIG }}" | base64 -d > ~/.zeus/global_config.json
-
-      - name: Build .zpk
-        run: zeus build
-
       - name: Get version
         id: version
         run: |
           VERSION=$(node -p "require('./app.json').app.version.name")
+          CODE=$(node -p "require('./app.json').app.version.code")
+          NAME=$(node -p "require('./app.json').app.appName")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: Package .zpk
+        run: |
+          mkdir -p dist
+          zip -r "dist/starline-zepp-${{ steps.version.outputs.version }}.zpk" \
+            app.json \
+            icon.png \
+            device-app/ \
+            side-service/ \
+            settings-app/ \
+            --exclude "*.DS_Store" \
+            --exclude "*/.git/*"
+          echo "Package contents:"
+          unzip -l "dist/starline-zepp-${{ steps.version.outputs.version }}.zpk"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -56,27 +57,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install Zeus CLI
-        run: npm install -g @zeppos/zeus-cli
-
-      - name: Restore Zeus credentials
-        run: |
-          mkdir -p ~/.zeus
-          echo "${{ secrets.ZEUS_CONFIG }}" | base64 -d > ~/.zeus/global_config.json
-
-      - name: Build .zpk
-        run: zeus build
-
       - name: Get version
         id: version
         run: |
           VERSION=$(node -p "require('./app.json').app.version.name")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Package .zpk
+        run: |
+          mkdir -p dist
+          zip -r "dist/starline-zepp-${{ steps.version.outputs.version }}.zpk" \
+            app.json \
+            icon.png \
+            device-app/ \
+            side-service/ \
+            settings-app/ \
+            --exclude "*.DS_Store"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
