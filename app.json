@@ -1,0 +1,43 @@
+{
+  "app": {
+    "appId": 1000001,
+    "appName": "StarLine Remote",
+    "appType": "app",
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    },
+    "icon": "icon.png",
+    "cover": "cover.png"
+  },
+  "permissions": [
+    "device:os.bg_service",
+    "data:user.info"
+  ],
+  "targets": {
+    "app": {
+      "minVersion": "2.0"
+    }
+  },
+  "module": {
+    "device:app": {
+      "url": "device-app/index.js",
+      "name": "StarLine Remote",
+      "cover": "cover.png"
+    },
+    "device:settings": {
+      "url": "settings-app/index.js"
+    },
+    "app-side:service": {
+      "url": "side-service/index.js"
+    }
+  },
+  "i18n": {
+    "ru-RU": {
+      "appName": "StarLine Remote"
+    },
+    "en-US": {
+      "appName": "StarLine Remote"
+    }
+  }
+}

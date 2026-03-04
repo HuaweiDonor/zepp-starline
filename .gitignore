@@ -1,0 +1,5 @@
+.DS_Store
+*.zpk
+dist/
+.zeus/
+node_modules/
