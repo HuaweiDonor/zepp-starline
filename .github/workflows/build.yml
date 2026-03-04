@@ -25,15 +25,15 @@ jobs:
       - name: Install Zeus CLI
         run: npm install -g @zeppos/zeus-cli
 
-      # Zeus requires login to build (credentials stored as GitHub Secrets)
-      # Add ZEUS_USERNAME and ZEUS_PASSWORD in repo Settings → Secrets → Actions
-      - name: Zeus Login
-        run: zeus login -u "${{ secrets.ZEUS_USERNAME }}" -p "${{ secrets.ZEUS_PASSWORD }}"
+      # Restore Zeus session from saved config (see README for how to generate ZEUS_CONFIG)
+      - name: Restore Zeus credentials
+        run: |
+          mkdir -p ~/.zeus
+          echo "${{ secrets.ZEUS_CONFIG }}" | base64 -d > ~/.zeus/global_config.json
 
       - name: Build .zpk
         run: zeus build
 
-      # Read version from app.json for artifact naming
       - name: Get version
         id: version
         run: |
@@ -47,7 +47,6 @@ jobs:
           path: dist/*.zpk
           if-no-files-found: error
 
-  # Creates a GitHub Release with the .zpk attached when you push a tag v*
   release:
     runs-on: ubuntu-latest
     needs: build
@@ -65,8 +64,10 @@ jobs:
       - name: Install Zeus CLI
         run: npm install -g @zeppos/zeus-cli
 
-      - name: Zeus Login
-        run: zeus login -u "${{ secrets.ZEUS_USERNAME }}" -p "${{ secrets.ZEUS_PASSWORD }}"
+      - name: Restore Zeus credentials
+        run: |
+          mkdir -p ~/.zeus
+          echo "${{ secrets.ZEUS_CONFIG }}" | base64 -d > ~/.zeus/global_config.json
 
       - name: Build .zpk
         run: zeus build
@@ -89,5 +90,3 @@ jobs:
             2. Открыть Zepp App → Профиль → Режим разработчика
             3. Установить через `zeus preview` или вручную
           files: dist/*.zpk
-          draft: false
-          prerelease: false
