@@ -1,88 +1,74 @@
-import { createWidget, widget, align, text_style, prop } from '@zos/ui';
-import { px } from '@zos/utils';
-import messageBuilder from '../shared/message';
+import { createWidget, widget, align, text_style } from '@zos/ui';
+import { pop } from '@zos/router';
 
 const SCREEN_W = 466;
 const SCREEN_H = 466;
-
-let onConfirm = null;
-
-export function showConfirmScreen(callback) {
-  onConfirm = callback;
-  hmApp.gotoPage({ url: 'device-app/pages/confirm' });
-}
 
 Page({
   build() {
     // Background
     createWidget(widget.FILL_RECT, {
-      x: 0,
-      y: 0,
-      w: SCREEN_W,
-      h: SCREEN_H,
+      x: 0, y: 0,
+      w: SCREEN_W, h: SCREEN_H,
       color: 0x1a1a1a,
     });
 
-    // Warning icon / title
+    // Title
     createWidget(widget.TEXT, {
-      x: px(40),
-      y: px(80),
-      w: SCREEN_W - px(80),
-      h: px(60),
-      text: '⚠ Запуск двигателя',
-      text_size: px(36),
+      x: 40, y: 80,
+      w: SCREEN_W - 80, h: 60,
+      text: 'Запуск двигателя',
+      text_size: 34,
       color: 0xffa500,
       align_h: align.CENTER_H,
     });
 
+    // Description
     createWidget(widget.TEXT, {
-      x: px(40),
-      y: px(160),
-      w: SCREEN_W - px(80),
-      h: px(80),
-      text: 'Подтвердите удалённый запуск двигателя',
-      text_size: px(28),
+      x: 40, y: 158,
+      w: SCREEN_W - 80, h: 100,
+      text: 'Подтвердите удаленный запуск двигателя',
+      text_size: 26,
       color: 0xcccccc,
       align_h: align.CENTER_H,
       text_style: text_style.WRAP,
     });
 
     // Confirm button
-    const confirmBtn = createWidget(widget.BUTTON, {
-      x: px(60),
-      y: px(280),
-      w: SCREEN_W - px(120),
-      h: px(70),
+    createWidget(widget.BUTTON, {
+      x: 60, y: 278,
+      w: SCREEN_W - 120, h: 70,
       text: 'Запустить',
-      text_size: px(32),
+      text_size: 30,
       normal_color: 0x1e8a1e,
       press_color: 0x156815,
-      radius: px(35),
+      radius: 35,
       click_func: () => {
-        if (onConfirm) onConfirm(true);
-        hmApp.goBack();
+        const gd = getApp()._options.globalData;
+        if (gd.mainPage && gd.pendingAction) {
+          gd.mainPage.sendCommand(gd.pendingAction, 1);
+        }
+        gd.pendingAction = null;
+        gd.mainPage = null;
+        pop();
       },
     });
 
     // Cancel button
     createWidget(widget.BUTTON, {
-      x: px(60),
-      y: px(370),
-      w: SCREEN_W - px(120),
-      h: px(60),
+      x: 60, y: 368,
+      w: SCREEN_W - 120, h: 60,
       text: 'Отмена',
-      text_size: px(28),
+      text_size: 26,
       normal_color: 0x333333,
       press_color: 0x222222,
-      radius: px(30),
+      radius: 30,
       click_func: () => {
-        if (onConfirm) onConfirm(false);
-        hmApp.goBack();
+        const gd = getApp()._options.globalData;
+        gd.pendingAction = null;
+        gd.mainPage = null;
+        pop();
       },
     });
-  },
-
-  onDestroy() {
-    onConfirm = null;
   },
 });

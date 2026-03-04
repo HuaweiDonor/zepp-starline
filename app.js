@@ -1,6 +1,5 @@
 import { MessageBuilder } from '@zos/ble/message';
 
-// Initialize MessageBuilder for device-side communication
 const messageBuilder = new MessageBuilder();
 
 App({
