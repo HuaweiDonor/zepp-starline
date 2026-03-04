@@ -33,11 +33,17 @@
           "name": "StarLine Remote",
           "cover": ["cover.png"]
         },
-        "device:settings": {
-          "url": "settings-app/index.js"
+        "page": {
+          "pages": [
+            "device-app/pages/main",
+            "device-app/pages/confirm"
+          ]
         },
-        "app-side:service": {
-          "url": "side-service/index.js"
+        "setting": {
+          "path": "settings-app/index.js"
+        },
+        "app-side": {
+          "path": "side-service/index.js"
         }
       },
       "platforms": [
