@@ -1,4 +1,5 @@
 {
+  "configVersion": "v3",
   "app": {
     "appId": 1107761,
     "appName": "StarLine Remote",
@@ -7,29 +8,44 @@
       "code": 1,
       "name": "1.0.0"
     },
+    "vender": "HuaweiDonor",
+    "description": "Remote start and security control for StarLine S96/S9 alarms",
     "icon": "icon.png",
-    "cover": "cover.png"
+    "cover": ["cover.png"]
   },
+  "runtime": {
+    "apiVersion": {
+      "compatible": "2.0",
+      "target": "2.1",
+      "minVersion": "2.0"
+    }
+  },
+  "defaultLanguage": "ru-RU",
   "permissions": [
     "device:os.bg_service",
     "data:user.info"
   ],
   "targets": {
     "app": {
-      "minVersion": "2.0"
-    }
-  },
-  "module": {
-    "device:app": {
-      "url": "device-app/index.js",
-      "name": "StarLine Remote",
-      "cover": "cover.png"
-    },
-    "device:settings": {
-      "url": "settings-app/index.js"
-    },
-    "app-side:service": {
-      "url": "side-service/index.js"
+      "module": {
+        "device:app": {
+          "url": "app.js",
+          "name": "StarLine Remote",
+          "cover": ["cover.png"]
+        },
+        "device:settings": {
+          "url": "settings-app/index.js"
+        },
+        "app-side:service": {
+          "url": "side-service/index.js"
+        }
+      },
+      "platforms": [
+        { "name": "Amazfit GTR 4", "deviceSource": 7930112 },
+        { "name": "Amazfit GTR 4", "deviceSource": 7930113 },
+        { "name": "Amazfit GTR 4", "deviceSource": 7864577 }
+      ],
+      "designWidth": 480
     }
   },
   "i18n": {
