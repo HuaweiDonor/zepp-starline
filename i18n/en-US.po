@@ -1,0 +1,2 @@
+msgid "app.name"
+msgstr "StarLine Remote"
