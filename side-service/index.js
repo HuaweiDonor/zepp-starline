@@ -235,12 +235,24 @@ async function getDeviceStatus() {
   if (!res || res.code !== 0) throw new Error('Ошибка получения статуса устройства');
 
   const info = res.desc || {};
+
+  // balance may be a number or object {value, currency}
+  let balance = info.balance;
+  if (balance && typeof balance === 'object') {
+    balance = balance.value !== undefined ? balance.value : null;
+  }
+
   cachedStatus = {
     engine: info.engine_state === 1,
     alarm: info.alarm_state === 1,
-    temp: info.temp !== undefined ? Math.round(info.temp) : null,
-    battery: info.battery_vol,
-    balance: info.balance,
+    etemp: info.etemp !== undefined ? Math.round(info.etemp) : null,
+    ctemp: info.ctemp !== undefined ? Math.round(info.ctemp) : null,
+    battery: info.battery_vol !== undefined ? info.battery_vol : (info.battery || null),
+    balance: balance,
+    // widget visibility flags (null = not set → default true)
+    show_etemp:   getSetting('show_etemp')   !== 'false',
+    show_battery: getSetting('show_battery') !== 'false',
+    show_balance: getSetting('show_balance') !== 'false',
   };
   lastStatusTime = now;
   return cachedStatus;

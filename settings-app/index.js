@@ -94,6 +94,32 @@ AppSettingsPage({
         ]),
       ]);
 
+    // ─── Helper: toggle row ───────────────────────────────────────────────────
+    const toggleRow = {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px 20px',
+      margin: '0 0 2px',
+    };
+    const toggleLabel = {
+      fontSize: '14px',
+      color: '#cccccc',
+    };
+
+    const ToggleRow = (label, key) => {
+      const defaultOn = storage.getItem(key);
+      const isOn = defaultOn === null ? true : defaultOn === 'true';
+      return View({ style: toggleRow }, [
+        View({ style: toggleLabel }, [label]),
+        Toggle({
+          value: isOn,
+          onChange: (val) => { storage.setItem(key, val ? 'true' : 'false'); },
+        }),
+      ]);
+    };
+
     // ─── Device list (shown after login) ─────────────────────────────────────
     let deviceListSection = [];
     const rawList = storage.getItem('device_list');
@@ -144,6 +170,12 @@ AppSettingsPage({
       View({ style: sectionLabel }, ['Настройки устройства']),
       Field('ID устройства', 'device_id', 'Скопируйте из списка выше'),
       Field('Время прогрева (мин)', 'warmup_time', '10'),
+
+      // Widget visibility
+      View({ style: sectionLabel }, ['Виджеты на часах']),
+      ToggleRow('Температура двигателя', 'show_etemp'),
+      ToggleRow('Напряжение АКБ', 'show_battery'),
+      ToggleRow('Баланс SIM-карты', 'show_balance'),
     ]);
   },
 });
