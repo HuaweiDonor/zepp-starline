@@ -1,0 +1,16 @@
+{
+  "name": "starline-zepp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "StarLine remote start for Amazfit GTR4 (Zepp OS 2.0)",
+  "scripts": {
+    "build": "zeus build",
+    "preview": "zeus preview"
+  },
+  "devDependencies": {
+    "@zeppos/zeus-cli": "^1.5.24"
+  },
+  "_moduleAliases": {
+    "zeppos-app-utils": "./node_modules/@zeppos/zeus-cli/private-modules/zeppos-app-utils"
+  }
+}

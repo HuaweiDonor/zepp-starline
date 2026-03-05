@@ -1,198 +1,230 @@
-import { createWidget, widget, align, prop } from '@zos/ui';
+import { createWidget, widget, align, text_style } from '@zos/ui';
 import { push } from '@zos/router';
+import { vibrate } from '@zos/interaction';
 
 const SCREEN_W = 466;
 const SCREEN_H = 466;
-const STATUS_REFRESH_MS = 90 * 1000;
-
-const globalData = getApp()._options.globalData;
+const { messageBuilder } = getApp()._options.globalData;
 
 let statusText = null;
-let engineText = null;
-let tempText = null;
-let alarmText = null;
-let loadingText = null;
 let engineBtn = null;
 let alarmBtn = null;
-let refreshTimer = null;
+let loadingText = null;
+let currentStatus = null;
+let isLoading = false;
 
-let state = {
-  engineRunning: false,
-  alarmOn: false,
-  temperature: '--',
-  loading: false,
-};
+function setLoading(loading) {
+  isLoading = loading;
+  if (loadingText) {
+    loadingText.setProperty(widget.TEXT, { visible: loading });
+  }
+  if (engineBtn) {
+    engineBtn.setProperty(widget.BUTTON, { enable: !loading });
+  }
+  if (alarmBtn) {
+    alarmBtn.setProperty(widget.BUTTON, { enable: !loading });
+  }
+}
+
+function updateStatusDisplay(status) {
+  currentStatus = status;
+  if (!statusText) return;
+
+  let lines = [];
+  if (status.engine) {
+    lines.push('Двигатель: ЗАПУЩЕН');
+  } else {
+    lines.push('Двигатель: выключен');
+  }
+  if (status.temp !== null && status.temp !== undefined) {
+    lines.push('Темп: ' + status.temp + ' C');
+  }
+  if (status.alarm) {
+    lines.push('ОХРАНА АКТИВНА');
+  } else {
+    lines.push('Охрана: выкл');
+  }
+
+  statusText.setProperty(widget.TEXT, { text: lines.join('\n') });
+
+  if (engineBtn) {
+    if (status.engine) {
+      engineBtn.setProperty(widget.BUTTON, {
+        text: 'Остановить',
+        normal_color: 0x8b1a1a,
+        press_color: 0x5c1111,
+      });
+    } else {
+      engineBtn.setProperty(widget.BUTTON, {
+        text: 'Запустить',
+        normal_color: 0x1e8a1e,
+        press_color: 0x156815,
+      });
+    }
+  }
+
+  if (alarmBtn) {
+    if (status.alarm) {
+      alarmBtn.setProperty(widget.BUTTON, {
+        text: 'Снять охрану',
+        normal_color: 0x8b4500,
+        press_color: 0x5c2e00,
+      });
+    } else {
+      alarmBtn.setProperty(widget.BUTTON, {
+        text: 'Охрана',
+        normal_color: 0x1a5c8a,
+        press_color: 0x114060,
+      });
+    }
+  }
+}
+
+function fetchStatus() {
+  setLoading(true);
+  messageBuilder
+    .request({ cmd: 'get_status' })
+    .then((res) => {
+      setLoading(false);
+      if (res && res.code === 0) {
+        updateStatusDisplay(res.data);
+      } else {
+        statusText && statusText.setProperty(widget.TEXT, {
+          text: 'Ошибка: ' + ((res && res.message) || 'нет связи'),
+        });
+      }
+    })
+    .catch((err) => {
+      setLoading(false);
+      statusText && statusText.setProperty(widget.TEXT, {
+        text: 'Ошибка связи',
+      });
+    });
+}
+
+function sendCommand(cmd, value) {
+  setLoading(true);
+  messageBuilder
+    .request({ cmd, value })
+    .then((res) => {
+      setLoading(false);
+      if (res && res.code === 0) {
+        vibrate({ mode: 0 });
+        updateStatusDisplay(res.data);
+      } else {
+        vibrate({ mode: 1 });
+        statusText && statusText.setProperty(widget.TEXT, {
+          text: 'Ошибка: ' + ((res && res.message) || 'команда не выполнена'),
+        });
+      }
+    })
+    .catch(() => {
+      setLoading(false);
+      vibrate({ mode: 1 });
+      statusText && statusText.setProperty(widget.TEXT, {
+        text: 'Ошибка связи',
+      });
+    });
+}
 
 Page({
+  state: {},
+
   build() {
+    // Background
     createWidget(widget.FILL_RECT, {
-      x: 0, y: 0, w: SCREEN_W, h: SCREEN_H,
+      x: 0, y: 0,
+      w: SCREEN_W, h: SCREEN_H,
       color: 0x121212,
     });
 
+    // App title
     createWidget(widget.TEXT, {
-      x: 0, y: 18, w: SCREEN_W, h: 48,
+      x: 0, y: 18,
+      w: SCREEN_W, h: 42,
       text: 'StarLine Remote',
-      text_size: 32, color: 0xffffff,
+      text_size: 28,
+      color: 0xffffff,
       align_h: align.CENTER_H,
     });
 
+    // Status area
     statusText = createWidget(widget.TEXT, {
-      x: 0, y: 72, w: SCREEN_W, h: 32,
-      text: 'Подключение...',
-      text_size: 22, color: 0x888888,
+      x: 30, y: 68,
+      w: SCREEN_W - 60, h: 120,
+      text: 'Загрузка...',
+      text_size: 26,
+      color: 0xcccccc,
       align_h: align.CENTER_H,
+      text_style: text_style.WRAP,
     });
 
-    engineText = createWidget(widget.TEXT, {
-      x: 20, y: 114, w: SCREEN_W - 40, h: 38,
-      text: 'Двигатель: --',
-      text_size: 26, color: 0xcccccc,
-      align_h: align.CENTER_H,
-    });
-
-    tempText = createWidget(widget.TEXT, {
-      x: 20, y: 158, w: SCREEN_W - 40, h: 34,
-      text: 'Температура: --',
-      text_size: 24, color: 0xcccccc,
-      align_h: align.CENTER_H,
-    });
-
-    alarmText = createWidget(widget.TEXT, {
-      x: 20, y: 198, w: SCREEN_W - 40, h: 34,
-      text: 'Охрана: --',
-      text_size: 24, color: 0xcccccc,
-      align_h: align.CENTER_H,
-    });
-
+    // Loading indicator
     loadingText = createWidget(widget.TEXT, {
-      x: 0, y: 238, w: SCREEN_W, h: 30,
-      text: '', text_size: 20, color: 0x888888,
+      x: 0, y: 190,
+      w: SCREEN_W, h: 30,
+      text: 'Подождите...',
+      text_size: 22,
+      color: 0x888888,
       align_h: align.CENTER_H,
+      visible: false,
     });
 
+    // Engine start/stop button
     engineBtn = createWidget(widget.BUTTON, {
-      x: 20, y: 280, w: 200, h: 64,
-      text: 'Запустить', text_size: 24,
-      normal_color: 0x1e8a1e, press_color: 0x156815,
-      radius: 16,
-      click_func: () => this.onEngineBtn(),
+      x: 40, y: 230,
+      w: SCREEN_W - 80, h: 70,
+      text: 'Запустить',
+      text_size: 30,
+      normal_color: 0x1e8a1e,
+      press_color: 0x156815,
+      radius: 35,
+      click_func: () => {
+        if (isLoading) return;
+        if (!currentStatus || !currentStatus.engine) {
+          // Starting engine — show confirm screen
+          const gd = getApp()._options.globalData;
+          gd.pendingAction = 'r_start';
+          gd.mainPage = { sendCommand };
+          push({ url: 'device-app/pages/confirm' });
+        } else {
+          // Stopping engine — no confirmation needed
+          sendCommand('r_start', 0);
+        }
+      },
     });
 
+    // Alarm toggle button
     alarmBtn = createWidget(widget.BUTTON, {
-      x: 246, y: 280, w: 200, h: 64,
-      text: 'Охрана', text_size: 24,
-      normal_color: 0x1a5fa8, press_color: 0x114275,
-      radius: 16,
-      click_func: () => this.onAlarmBtn(),
+      x: 40, y: 318,
+      w: SCREEN_W - 80, h: 60,
+      text: 'Охрана',
+      text_size: 26,
+      normal_color: 0x1a5c8a,
+      press_color: 0x114060,
+      radius: 30,
+      click_func: () => {
+        if (isLoading) return;
+        const alarmValue = (currentStatus && currentStatus.alarm) ? 0 : 1;
+        sendCommand('alarm', alarmValue);
+      },
     });
 
+    // Refresh button (small, bottom)
     createWidget(widget.BUTTON, {
-      x: 133, y: 366, w: 200, h: 54,
-      text: 'Обновить', text_size: 22,
-      normal_color: 0x333333, press_color: 0x222222,
-      radius: 27,
-      click_func: () => this.fetchStatus(),
+      x: 163, y: 396,
+      w: 140, h: 44,
+      text: 'Обновить',
+      text_size: 22,
+      normal_color: 0x333333,
+      press_color: 0x222222,
+      radius: 22,
+      click_func: () => {
+        if (!isLoading) fetchStatus();
+      },
     });
 
-    this.fetchStatus();
-
-    refreshTimer = setInterval(() => {
-      if (!state.loading) this.fetchStatus();
-    }, STATUS_REFRESH_MS);
-  },
-
-  onEngineBtn() {
-    if (state.loading) return;
-    if (state.engineRunning) {
-      this.sendCommand('r_start', 0);
-    } else {
-      globalData.pendingAction = 'r_start';
-      globalData.mainPage = this;
-      push({ url: 'device-app/pages/confirm' });
-    }
-  },
-
-  onAlarmBtn() {
-    if (state.loading) return;
-    this.sendCommand('alarm', state.alarmOn ? 0 : 1);
-  },
-
-  fetchStatus() {
-    this.setLoading(true);
-    globalData.messageBuilder
-      .request({ cmd: 'get_status' }, { timeout: 15000 })
-      .then(res => {
-        this.setLoading(false);
-        if (res && res.code === 0 && res.data) {
-          this.updateState(res.data);
-        } else {
-          this.setStatus('Ошибка статуса', 0xff4444);
-        }
-      })
-      .catch(() => {
-        this.setLoading(false);
-        this.setStatus('Нет связи', 0xff4444);
-      });
-  },
-
-  sendCommand(cmd, value) {
-    this.setLoading(true, 'Выполняется...');
-    globalData.messageBuilder
-      .request({ cmd, value }, { timeout: 20000 })
-      .then(res => {
-        this.setLoading(false);
-        if (res && res.code === 0) {
-          if (res.data) this.updateState(res.data);
-          this.setStatus('Готово', 0x44ff44);
-        } else {
-          this.setStatus((res && res.message) || 'Ошибка', 0xff4444);
-        }
-      })
-      .catch(() => {
-        this.setLoading(false);
-        this.setStatus('Ошибка команды', 0xff4444);
-      });
-  },
-
-  updateState(data) {
-    state.engineRunning = !!data.engine;
-    state.alarmOn = !!data.alarm;
-    state.temperature = data.temp !== undefined ? data.temp + 'C' : '--';
-
-    engineText && engineText.setProperty(prop.TEXT,
-      'Двигатель: ' + (state.engineRunning ? 'Работает' : 'Заглушен'));
-    engineText && engineText.setProperty(prop.COLOR,
-      state.engineRunning ? 0x44ff44 : 0xcccccc);
-    tempText && tempText.setProperty(prop.TEXT, 'Темп: ' + state.temperature);
-    alarmText && alarmText.setProperty(prop.TEXT,
-      'Охрана: ' + (state.alarmOn ? 'Вкл' : 'Выкл'));
-    alarmText && alarmText.setProperty(prop.COLOR,
-      state.alarmOn ? 0x44aaff : 0xcccccc);
-    engineBtn && engineBtn.setProperty(prop.TEXT,
-      state.engineRunning ? 'Заглушить' : 'Запустить');
-    engineBtn && engineBtn.setProperty(prop.MORE, {
-      normal_color: state.engineRunning ? 0x8a1e1e : 0x1e8a1e,
-      press_color:  state.engineRunning ? 0x681515 : 0x156815,
-    });
-    alarmBtn && alarmBtn.setProperty(prop.TEXT,
-      state.alarmOn ? 'Снять охр.' : 'Охрана');
-    this.setStatus('Обновлено', 0x888888);
-  },
-
-  setLoading(isLoading, msg) {
-    state.loading = isLoading;
-    loadingText && loadingText.setProperty(prop.TEXT,
-      isLoading ? (msg || 'Загрузка...') : '');
-  },
-
-  setStatus(msg, color) {
-    statusText && statusText.setProperty(prop.TEXT, msg);
-    statusText && statusText.setProperty(prop.COLOR, color || 0x888888);
-  },
-
-  onDestroy() {
-    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-    globalData.mainPage = null;
+    // Load status on page open
+    fetchStatus();
   },
 });

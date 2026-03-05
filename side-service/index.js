@@ -1,6 +1,5 @@
-import { MessageBuilder } from '@zos/ble/message';
+import { MessageBuilder } from './shared/message-side';
 import { settingsStorage } from '@zos/storage';
-import { Fetch } from '@zos/app-service';
 
 // ─── StarLine API endpoints ───────────────────────────────────────────────────
 const ID_BASE = 'https://id.starline.ru/apiV3';
@@ -120,6 +119,26 @@ function clearToken() {
   settingsStorage.removeItem('slnet_expiry');
 }
 
+// ─── HTTP helpers ─────────────────────────────────────────────────────────────
+async function fetchJson(url, options) {
+  const res = await fetch({ url, ...options });
+  const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
+  return body;
+}
+
+// fetchWithCookie parses Set-Cookie header to extract slnet value
+async function fetchWithCookie(url, options) {
+  const res = await fetch({ url, ...options });
+  const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
+  // Extract slnet from Set-Cookie header
+  const cookieHeader = (res.headers && (res.headers['Set-Cookie'] || res.headers['set-cookie'])) || '';
+  const match = cookieHeader.match(/slnet=([^;]+)/);
+  if (match) {
+    body.slnet = match[1];
+  }
+  return body;
+}
+
 // ─── StarLine 3-step auth ─────────────────────────────────────────────────────
 async function authenticate() {
   const appId = getSetting('app_id');
@@ -132,8 +151,10 @@ async function authenticate() {
   }
 
   // Step 1: Get application token
-  const step1Url = `${ID_BASE}/application/getToken?appId=${encodeURIComponent(appId)}&secret=${encodeURIComponent(secret)}`;
-  const step1Res = await fetchJson(step1Url, { method: 'GET' });
+  const step1Res = await fetchJson(
+    `${ID_BASE}/application/getToken?appId=${encodeURIComponent(appId)}&secret=${encodeURIComponent(secret)}`,
+    { method: 'GET' }
+  );
   if (!step1Res || step1Res.state !== 1) {
     throw new Error('Шаг 1: не удалось получить app token. Проверьте AppID и Secret');
   }
@@ -174,50 +195,6 @@ async function getToken() {
   return authenticate();
 }
 
-// ─── HTTP helpers ─────────────────────────────────────────────────────────────
-async function fetchJson(url, options) {
-  return new Promise((resolve, reject) => {
-    const req = new Fetch({ url, ...options });
-    req.addEventListener('complete', (res) => {
-      try {
-        const data = JSON.parse(res.body);
-        resolve(data);
-      } catch {
-        reject(new Error('Ошибка парсинга JSON от ' + url));
-      }
-    });
-    req.addEventListener('error', (err) => {
-      reject(new Error('HTTP ошибка: ' + (err.message || url)));
-    });
-    req.send();
-  });
-}
-
-// fetchWithCookie parses Set-Cookie header to extract slnet value
-async function fetchWithCookie(url, options) {
-  return new Promise((resolve, reject) => {
-    const req = new Fetch({ url, ...options });
-    req.addEventListener('complete', (res) => {
-      try {
-        const body = JSON.parse(res.body);
-        // Extract slnet from Set-Cookie header
-        const cookieHeader = (res.headers && (res.headers['Set-Cookie'] || res.headers['set-cookie'])) || '';
-        const match = cookieHeader.match(/slnet=([^;]+)/);
-        if (match) {
-          body.slnet = match[1];
-        }
-        resolve(body);
-      } catch {
-        reject(new Error('Ошибка парсинга ответа авторизации'));
-      }
-    });
-    req.addEventListener('error', (err) => {
-      reject(new Error('HTTP ошибка авторизации: ' + (err.message || '')));
-    });
-    req.send();
-  });
-}
-
 async function apiRequest(path, body, method = 'POST') {
   let token = await getToken();
 
@@ -234,7 +211,7 @@ async function apiRequest(path, body, method = 'POST') {
 
   let res = await doRequest(token);
 
-  // On 401 / code 2 (session expired) — re-authenticate once
+  // On code 2 (session expired) — re-authenticate once
   if (res && (res.code === 2 || res.code === 401)) {
     clearToken();
     token = await authenticate();
@@ -320,39 +297,39 @@ settingsStorage.addListener('change', async ({ key, newValue }) => {
   }
 });
 
-// ─── Message handler (commands from Device App) ───────────────────────────────
-messageBuilder.on('request', async (req, res) => {
-  const { cmd, value } = req.data || {};
-
-  try {
-    switch (cmd) {
-      case 'get_status': {
-        const status = await getDeviceStatus();
-        res.end({ code: 0, data: status });
-        break;
-      }
-      case 'r_start':
-      case 'alarm': {
-        const status = await sendDeviceCommand(cmd, value);
-        res.end({ code: 0, data: status });
-        break;
-      }
-      default:
-        res.end({ code: 1, message: 'Неизвестная команда: ' + cmd });
-    }
-  } catch (e) {
-    res.end({ code: 1, message: e.message || 'Внутренняя ошибка' });
-  }
-});
-
 // ─── Side Service lifecycle ───────────────────────────────────────────────────
-SideService({
+AppSideService({
   onInit() {
-    messageBuilder.connect();
+    messageBuilder.listen(() => {});
+
+    messageBuilder.on('request', async (ctx) => {
+      const { cmd, value } = messageBuilder.buf2Json(ctx.request.payload) || {};
+
+      try {
+        switch (cmd) {
+          case 'get_status': {
+            const status = await getDeviceStatus();
+            ctx.response({ data: { code: 0, data: status } });
+            break;
+          }
+          case 'r_start':
+          case 'alarm': {
+            const status = await sendDeviceCommand(cmd, value);
+            ctx.response({ data: { code: 0, data: status } });
+            break;
+          }
+          default:
+            ctx.response({ data: { code: 1, message: 'Неизвестная команда: ' + cmd } });
+        }
+      } catch (e) {
+        ctx.response({ data: { code: 1, message: e.message || 'Внутренняя ошибка' } });
+      }
+    });
+
     loadCachedToken();
   },
 
-  onDestroy() {
-    messageBuilder.disConnect();
-  },
+  onRun() {},
+
+  onDestroy() {},
 });

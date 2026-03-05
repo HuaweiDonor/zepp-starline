@@ -3,3 +3,5 @@
 dist/
 .zeus/
 node_modules/
+package-lock.json
+preview-qr.png

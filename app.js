@@ -1,17 +1,26 @@
-import { MessageBuilder } from '@zos/ble/message';
-
-const messageBuilder = new MessageBuilder();
+import "./device-app/shared/device-polyfill";
+import { MessageBuilder } from "./device-app/shared/message";
+import { getPackageInfo } from "@zos/app";
+import * as ble from "@zos/ble";
 
 App({
   globalData: {
-    messageBuilder,
+    messageBuilder: null,
   },
-
-  onCreate() {
+  onCreate(options) {
+    const { appId } = getPackageInfo();
+    const messageBuilder = new MessageBuilder({
+      appId,
+      appDevicePort: 20,
+      appSidePort: 0,
+      ble,
+    });
+    this.globalData.messageBuilder = messageBuilder;
     messageBuilder.connect();
   },
 
-  onDestroy() {
-    messageBuilder.disConnect();
+  onDestroy(options) {
+    this.globalData.messageBuilder &&
+      this.globalData.messageBuilder.disConnect();
   },
 });
