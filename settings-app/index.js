@@ -88,6 +88,27 @@ AppSettingsPage({
       lineHeight: '1.9',
       whiteSpace: 'pre-wrap',
       fontFamily: 'monospace',
+      overflowX: 'hidden',
+      wordBreak: 'break-all',
+      maxHeight: '240px',
+      overflowY: 'auto',
+    };
+    const deviceRow = {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '8px 0',
+      borderBottom: '1px solid #1e3a1e',
+    };
+    const copyBtn = {
+      background: '#1a3a1a',
+      color: '#7ec87e',
+      fontSize: '12px',
+      fontWeight: '600',
+      borderRadius: '8px',
+      padding: '8px 12px',
+      border: '1px solid #2a5a2a',
     };
     const clearBtn = {
       display: 'block',
@@ -132,13 +153,26 @@ AppSettingsPage({
     if (rawList) {
       try {
         const devices = JSON.parse(rawList);
-        const text = devices
-          .map(d => (d.alias || d.name || 'Устройство') + '  —  ID: ' + d.device_id)
-          .join('\n');
-        if (text) {
+        if (devices && devices.length) {
           deviceListSection = [
             View({ style: sectionLabel }, ['Найденные устройства']),
-            View({ style: deviceBox }, [text]),
+            View({ style: deviceBox }, [
+              ...devices.map(d =>
+                View({ style: deviceRow }, [
+                  View({ style: { flex: '1', fontSize: '13px', color: '#7ec87e' } }, [
+                    (d.alias || d.name || 'Устройство') + '\nID: ' + d.device_id
+                  ]),
+                  Button({
+                    label: 'Копировать',
+                    style: copyBtn,
+                    onClick: () => {
+                      try { navigator.clipboard.writeText(String(d.device_id)); } catch(e) {}
+                      storage.setItem('device_id', String(d.device_id));
+                    }
+                  })
+                ])
+              )
+            ]),
           ];
         }
       } catch (e) {}
