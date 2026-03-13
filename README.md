@@ -30,7 +30,7 @@
 - **Напряжение АКБ** — контроль заряда аккумулятора
 - **Баланс SIM-карты** — остаток на счёте встроенной SIM
 - **Виброотклик** — подтверждение выполнения или ошибки команды
-- **Кеш токена** — авторизация кешируется на 4 часа, обновляется автоматически
+- **Кеш токена** — slnet-сессия кешируется на 23 часа, обновляется автоматически
 - **Защита от случайного нажатия** — экран подтверждения перед запуском двигателя
 - **Гибкость** — каждый виджет (температура, АКБ, баланс) включается/выключается в настройках
 
@@ -164,35 +164,69 @@ starline-zepp/
 
 ## StarLine API
 
-Используется официальный REST API [developer.starline.ru](https://developer.starline.ru). Авторизация — 3 шага:
+Используется официальный REST API [developer.starline.ru](https://developer.starline.ru). Авторизация — 4 шага:
 
 ```
-1. GET  id.starline.ru/apiV3/application/getToken?appId=...&secret=...
-2. POST id.starline.ru/apiV3/user/login   { login, pass: sha1(password) }
-3. POST dev.starline.ru/json/v2/auth.slid → Set-Cookie: slnet=...
+1a. GET  id.starline.ru/apiV3/application/getCode
+        ?appId=...&secret=MD5(secret_key)
+        → {state:1, desc: {code: "..."}}
+
+1b. GET  id.starline.ru/apiV3/application/getToken
+        ?appId=...&secret=MD5(secret_key + appCode)
+        → {state:1, desc: {token: "..."}}
+
+2.  POST id.starline.ru/apiV3/user/login
+        Content-Type: application/x-www-form-urlencoded
+        Header: token: <appToken>
+        Body: login=<email>&pass=SHA1(password)
+        → {state:1, desc: {user_token: "...", user_id: N}}
+
+3.  POST developer.starline.ru/json/v2/auth.slid
+        Content-Type: application/json
+        Body: {"slid_token": "<user_token>"}
+        → Set-Cookie: slnet=...   (сессионный токен на 24 часа)
 ```
 
-Управление:
+Статус устройства (`/json/v3/device/{id}/data`):
 
 ```
-GET  dev.starline.ru/json/v2/device/{id}/common_info      # статус, метрики
-POST dev.starline.ru/json/v2/device/{id}/set_param
-     { r_start: 1, r_timer: 10 }   # запуск (прогрев 10 мин)
-     { r_start: 0 }                # остановка
-     { alarm: 1 }                  # поставить на охрану
-     { alarm: 0 }                  # снять с охраны
+GET developer.starline.ru/json/v3/device/{id}/data
+Cookie: slnet=...
+
+→ {
+    code: "200",
+    data: {
+      state:   { r_start: bool, arm: bool, ... },
+      common:  { etemp: N, ctemp: N, battery: N, ... },
+      balance: [ {key: "active", value: "N.NN ₽"}, ... ],
+      ...
+    }
+  }
 ```
 
-Доступные поля в `common_info`:
+| Поле | Путь в JSON | Описание |
+|---|---|---|
+| Двигатель | `data.state.r_start` | `true` = запущен удалённо |
+| Охрана | `data.state.arm` | `true` = охрана активна |
+| Темп. двигателя | `data.common.etemp` | °C |
+| Темп. салона | `data.common.ctemp` | °C |
+| Напряжение АКБ | `data.common.battery` | В |
+| Баланс SIM | `data.balance[].value` | выбирается запись с `key="active"` |
 
-| Поле | Описание |
-|---|---|
-| `engine_state` | Состояние двигателя (1 = запущен) |
-| `alarm_state` | Охрана (1 = активна) |
-| `etemp` | Температура двигателя (°C) |
-| `ctemp` | Температура в салоне (°C) |
-| `battery_vol` | Напряжение АКБ (В) |
-| `balance` | Баланс SIM-карты |
+> **Важно:** поле `code` в ответах — **строка** `"200"`, не число. Используйте нестрогое сравнение `== 200`.
+
+Управление (`/json/v1/device/{id}/set_param`):
+
+```
+POST developer.starline.ru/json/v1/device/{id}/set_param
+Cookie: slnet=...
+Content-Type: application/json
+
+Запуск двигателя:  {"type": "ign_start", "ign_start": 1}
+Остановка:         {"type": "ign_stop",  "ign_stop":  1}
+Поставить охрану:  {"type": "arm",       "arm": 1}
+Снять охрану:      {"type": "arm",       "arm": 0}
+```
 
 > **Лимит:** ~1000 запросов в сутки. Статус рекомендуется обновлять не чаще раза в 90 секунд.
 
@@ -211,6 +245,68 @@ base64 -w0 ~/.zepp/.zeus
 ```
 
 Settings → Secrets and variables → Actions → **New repository secret** → `ZEUS_CONFIG`.
+
+---
+
+## Технические нюансы Zepp OS
+
+Полезно знать при разработке под Zepp OS 2.0:
+
+**`settingsStorage` в Side Service**
+
+В Side Service нельзя импортировать `settingsStorage` из `@zos/storage` — это модуль для **device-app** (часов). В Side Service хранилище настроек доступно только как **глобальный объект** `settings.settingsStorage`:
+
+```js
+// ❌ Неправильно — это watch-side storage, в side-service не работает
+import { settingsStorage } from '@zos/storage';
+settingsStorage.addListener('change', ...); // никогда не сработает
+
+// ✅ Правильно — глобальный объект companion
+settings.settingsStorage.addListener('change', ...);
+settings.settingsStorage.getItem('key');
+```
+
+**`fetch()` без object spread**
+
+В QuickJS-окружении Side Service объект `fetch()` не поддерживает spread оператор (`{...options}`). Свойства нужно перечислять явно:
+
+```js
+// ❌ Не работает в Zepp side-service
+const res = await fetch({ url, ...options });
+
+// ✅ Работает
+const res = await fetch({ url: url, method: opts.method || 'GET', headers: opts.headers, body: opts.body });
+```
+
+**`setProperty()` для текстовых виджетов**
+
+Для виджетов `TEXT` и видимости используются `prop.TEXT` / `prop.VISIBLE`, а не `widget.TEXT`. `prop` — отдельный импорт из `@zos/ui`:
+
+```js
+import { createWidget, widget, prop, align } from '@zos/ui';
+
+// ❌ Не работает — виджет TEXT молча игнорирует этот вызов
+textWidget.setProperty(widget.TEXT, { text: 'Hello', color: 0xff0000 });
+
+// ✅ Правильно
+textWidget.setProperty(prop.TEXT, 'Hello');
+textWidget.setProperty(prop.VISIBLE, false);
+
+// ✅ Для BUTTON объектный синтаксис работает корректно
+buttonWidget.setProperty(widget.BUTTON, { text: 'Click', normal_color: 0x1e8a1e });
+```
+
+**JSON.parse и строковые настройки**
+
+`JSON.parse('123456')` возвращает **число** `123456`, а не строку. Это ломает SHA1 (у числа нет `.length`). При чтении credentials из `settingsStorage` используйте `getItem()` напрямую, без `JSON.parse`:
+
+```js
+// ❌ password станет числом 123456, sha1(число) сломается
+const password = JSON.parse(settingsStorage.getItem('password'));
+
+// ✅ Всегда строка
+const password = settings.settingsStorage.getItem('password') || '';
+```
 
 ---
 
