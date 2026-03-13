@@ -6,4 +6,5 @@ node_modules/
 package-lock.json
 preview-qr.png
 *.jpg
+!docs/*.jpg
 new.png
