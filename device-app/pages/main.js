@@ -1,4 +1,4 @@
-import { createWidget, widget, align, text_style } from '@zos/ui';
+import { createWidget, widget, prop, align, text_style } from '@zos/ui';
 import { push } from '@zos/router';
 import { vibrate } from '@zos/interaction';
 
@@ -42,11 +42,10 @@ function setLoading(loading) {
   alarmBtn && alarmBtn.setProperty(widget.BUTTON, { enable: !loading });
 }
 
-// Hides/shows a metric tile: background rect + value text + label text
+// Hides/shows a metric tile: value text + label text
 function setTileVisible(tileRect, valueText, labelText, visible) {
-  tileRect.setProperty(widget.FILL_RECT, { color: visible ? 0x1e1e1e : 0x121212 });
-  valueText.setProperty(widget.TEXT, { visible });
-  labelText.setProperty(widget.TEXT, { visible });
+  valueText.setProperty(prop.VISIBLE, visible);
+  labelText.setProperty(prop.VISIBLE, visible);
 }
 
 function updateStatusDisplay(status) {
@@ -68,36 +67,24 @@ function updateStatusDisplay(status) {
 
   // ── Engine/alarm state ──────────────────────────────────────────────────────
   if (engineStateText) {
-    engineStateText.setProperty(widget.TEXT, {
-      text:  status.engine ? 'РАБОТАЕТ' : 'Выкл',
-      color: status.engine ? 0x4caf50 : 0x666666,
-    });
+    engineStateText.setProperty(prop.TEXT, status.engine ? 'РАБОТАЕТ' : 'Выкл');
   }
   if (alarmStateText) {
-    alarmStateText.setProperty(widget.TEXT, {
-      text:  status.alarm ? 'ОХРАНА' : 'Снята',
-      color: status.alarm ? 0xff9800 : 0x666666,
-    });
+    alarmStateText.setProperty(prop.TEXT, status.alarm ? 'ОХРАНА' : 'Снята');
   }
 
   // ── Metrics ─────────────────────────────────────────────────────────────────
   if (etempValue) {
     const t = status.etemp;
-    etempValue.setProperty(widget.TEXT, {
-      text: (t !== null && t !== undefined) ? t + '°C' : '--',
-    });
+    etempValue.setProperty(prop.TEXT, (t !== null && t !== undefined) ? t + '°C' : '--');
   }
   if (batteryValue) {
     const v = status.battery;
-    batteryValue.setProperty(widget.TEXT, {
-      text: (v !== null && v !== undefined) ? (+v).toFixed(1) + 'В' : '--',
-    });
+    batteryValue.setProperty(prop.TEXT, (v !== null && v !== undefined) ? (+v).toFixed(1) + 'В' : '--');
   }
   if (balanceValue) {
     const b = status.balance;
-    balanceValue.setProperty(widget.TEXT, {
-      text: (b !== null && b !== undefined) ? b + ' ₽' : '--',
-    });
+    balanceValue.setProperty(prop.TEXT, (b !== null && b !== undefined) ? b + ' ₽' : '--');
   }
 
   // ── Engine button ────────────────────────────────────────────────────────────
@@ -125,22 +112,25 @@ function fetchStatus() {
   messageBuilder.request({ cmd: 'get_status' })
     .then((res) => {
       setLoading(false);
-      if (res && res.code === 0) {
-        updateStatusDisplay(res.data);
-      } else {
-        engineStateText && engineStateText.setProperty(widget.TEXT, {
-          text: 'Ошибка', color: 0xff4444,
-        });
-        engineBtn && engineBtn.setProperty(widget.BUTTON, {
-          text: 'Повтор', enable: true, normal_color: 0x333333, press_color: 0x222222,
-        });
+      try {
+        if (res && res.code === 0) {
+          updateStatusDisplay(res.data);
+        } else {
+          const dbg = res ? ('code=' + res.code) : 'null';
+          engineStateText && engineStateText.setProperty(prop.TEXT, dbg);
+          engineBtn && engineBtn.setProperty(widget.BUTTON, {
+            text: 'Повтор', enable: true, normal_color: 0x333333, press_color: 0x222222,
+          });
+        }
+      } catch (e) {
+        engineStateText && engineStateText.setProperty(prop.TEXT,
+          'ERR:' + (e && e.message ? e.message.slice(0, 20) : '?'));
       }
     })
-    .catch(() => {
+    .catch((e) => {
       setLoading(false);
-      engineStateText && engineStateText.setProperty(widget.TEXT, {
-        text: 'Нет связи', color: 0xff4444,
-      });
+      const msg = (e && e.message) ? e.message.slice(0, 15) : 'timeout';
+      engineStateText && engineStateText.setProperty(prop.TEXT, msg);
       engineBtn && engineBtn.setProperty(widget.BUTTON, {
         text: 'Повтор', enable: true, normal_color: 0x333333, press_color: 0x222222,
       });
@@ -157,9 +147,7 @@ function sendCommand(cmd, value) {
         updateStatusDisplay(res.data);
       } else {
         vibrate({ mode: 1 });
-        engineStateText && engineStateText.setProperty(widget.TEXT, {
-          text: 'Ошибка', color: 0xff4444,
-        });
+        engineStateText && engineStateText.setProperty(prop.TEXT, 'Ошибка');
         if (engineBtn) {
           engineBtn.setProperty(widget.BUTTON, {
             text: 'Повтор', enable: true, normal_color: 0x333333, press_color: 0x222222,
@@ -295,12 +283,12 @@ Page({
 
     // ── Engine start/stop button ───────────────────────────────────────────────
     engineBtn = createWidget(widget.BUTTON, {
-      x: 40, y: 262, w: SCREEN_W - 80, h: 66,
+      x: 40, y: 264, w: SCREEN_W - 80, h: 56,
       text: 'Запустить',
-      text_size: 28,
+      text_size: 24,
       normal_color: 0x1e8a1e,
       press_color:  0x156815,
-      radius: 33,
+      radius: 28,
       click_func: () => {
         if (isLoading) return;
         if (!currentStatus || !currentStatus.engine) {
@@ -316,12 +304,12 @@ Page({
 
     // ── Alarm toggle button ────────────────────────────────────────────────────
     alarmBtn = createWidget(widget.BUTTON, {
-      x: 40, y: 338, w: SCREEN_W - 80, h: 54,
+      x: 40, y: 330, w: SCREEN_W - 80, h: 46,
       text: 'Охрана',
-      text_size: 24,
+      text_size: 20,
       normal_color: 0x1a5c8a,
       press_color:  0x114060,
-      radius: 27,
+      radius: 23,
       click_func: () => {
         if (isLoading) return;
         sendCommand('alarm', (currentStatus && currentStatus.alarm) ? 0 : 1);

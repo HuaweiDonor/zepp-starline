@@ -25,6 +25,10 @@
     "device:os.bg_service",
     "data:user.info"
   ],
+  "allowDomains": [
+    "id.starline.ru",
+    "developer.starline.ru"
+  ],
   "targets": {
     "app": {
       "module": {

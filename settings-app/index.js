@@ -41,19 +41,6 @@ AppSettingsPage({
     const fieldWrap = {
       margin: '0 16px 12px',
     };
-    const fieldLabel = {
-      fontSize: '13px',
-      color: '#888',
-      marginBottom: '6px',
-      paddingLeft: '2px',
-    };
-    const inputBox = {
-      background: '#1e1e1e',
-      border: '1px solid #333',
-      borderRadius: '8px',
-      padding: '0 4px',
-    };
-    const divider = { height: '1px', background: '#2a2a2a', margin: '4px 16px 12px' };
     const loginBtn = {
       display: 'block',
       margin: '8px 16px 0',
@@ -78,23 +65,6 @@ AppSettingsPage({
       lineHeight: '1.7',
       whiteSpace: 'pre-wrap',
     };
-
-    // ─── Helper: labelled input ───────────────────────────────────────────────
-    const Field = (label, key, placeholder, extra) =>
-      View({ style: fieldWrap }, [
-        View({ style: fieldLabel }, [label]),
-        View({ style: inputBox }, [
-          TextInput({
-            label: '',
-            value: storage.getItem(key) || '',
-            placeholder,
-            onChange: (val) => { storage.setItem(key, val); },
-            ...extra,
-          }),
-        ]),
-      ]);
-
-    // ─── Helper: toggle row ───────────────────────────────────────────────────
     const toggleRow = {
       display: 'flex',
       flexDirection: 'row',
@@ -107,10 +77,46 @@ AppSettingsPage({
       fontSize: '14px',
       color: '#cccccc',
     };
+    const logBox = {
+      margin: '0 16px',
+      background: '#0a0a0a',
+      border: '1px solid #222',
+      borderRadius: '10px',
+      padding: '10px 12px',
+      fontSize: '11px',
+      color: '#7ec87e',
+      lineHeight: '1.9',
+      whiteSpace: 'pre-wrap',
+      fontFamily: 'monospace',
+    };
+    const clearBtn = {
+      display: 'block',
+      margin: '8px 16px 0',
+      background: '#1a1a1a',
+      color: '#555',
+      fontSize: '13px',
+      borderRadius: '8px',
+      padding: '10px',
+      textAlign: 'center',
+      border: '1px solid #2a2a2a',
+      width: 'auto',
+    };
 
+    // ─── Helper: input field ──────────────────────────────────────────────────
+    const Field = (label, key, placeholder) =>
+      View({ style: fieldWrap }, [
+        TextInput({
+          label,
+          value: storage.getItem(key) || '',
+          placeholder,
+          onChange: (val) => { storage.setItem(key, val); },
+        }),
+      ]);
+
+    // ─── Helper: toggle row ───────────────────────────────────────────────────
     const ToggleRow = (label, key) => {
-      const defaultOn = storage.getItem(key);
-      const isOn = defaultOn === null ? true : defaultOn === 'true';
+      const stored = storage.getItem(key);
+      const isOn = stored === null ? true : stored === 'true';
       return View({ style: toggleRow }, [
         View({ style: toggleLabel }, [label]),
         Toggle({
@@ -138,44 +144,61 @@ AppSettingsPage({
       } catch (e) {}
     }
 
+    // ─── Log section ─────────────────────────────────────────────────────────
+    let logText = '— нет событий —\n(закройте и откройте настройки для обновления)';
+    try {
+      const stored = storage.getItem('_log');
+      if (stored) {
+        const entries = JSON.parse(stored);
+        if (entries && entries.length) {
+          logText = entries.slice(0, 10).join('\n') + '\n\n(закройте и откройте для обновления)';
+        }
+      }
+    } catch (e) {}
+
+    const logSection = [
+      View({ style: sectionLabel }, ['Журнал событий']),
+      View({ style: logBox }, [logText]),
+      Button({
+        label: 'Очистить лог',
+        style: clearBtn,
+        onClick: () => { storage.setItem('_log', '[]'); },
+      }),
+    ];
+
     // ─── Build ────────────────────────────────────────────────────────────────
     return View({ style: page }, [
-      // Header
       View({ style: header }, [
         View({ style: headerTitle }, ['StarLine Remote']),
         View({ style: headerSub }, ['Настройки подключения']),
       ]),
 
-      // Account
       View({ style: sectionLabel }, ['Аккаунт StarLine']),
       Field('Email', 'email', 'user@example.com'),
       Field('Пароль', 'password', '••••••••'),
 
-      // API keys
       View({ style: sectionLabel }, ['API ключи (developer.starline.ru)']),
       Field('App ID', 'app_id', '12345'),
       Field('Secret Key', 'secret_key', 'xxxxxxxxxxxxxxxx'),
 
-      // Login button
       Button({
         label: 'Войти и получить список устройств',
         style: loginBtn,
         onClick: () => { storage.setItem('action', 'login'); },
       }),
 
-      // Device list after login
       ...deviceListSection,
 
-      // Device settings
       View({ style: sectionLabel }, ['Настройки устройства']),
       Field('ID устройства', 'device_id', 'Скопируйте из списка выше'),
       Field('Время прогрева (мин)', 'warmup_time', '10'),
 
-      // Widget visibility
       View({ style: sectionLabel }, ['Виджеты на часах']),
       ToggleRow('Температура двигателя', 'show_etemp'),
       ToggleRow('Напряжение АКБ', 'show_battery'),
       ToggleRow('Баланс SIM-карты', 'show_balance'),
+
+      ...logSection,
     ]);
   },
 });
