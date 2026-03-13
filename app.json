@@ -35,7 +35,7 @@
         "page": {
           "pages": [
             "device-app/pages/main",
-            "device-app/pages/confirm"
+            "device-app/pages/actions"
           ]
         },
         "setting": {

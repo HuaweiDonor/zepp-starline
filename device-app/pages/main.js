@@ -1,6 +1,6 @@
-import { createWidget, widget, prop, align, text_style } from '@zos/ui';
+import { createWidget, widget, prop, align } from '@zos/ui';
+import { vibrate, onGesture, GESTURE_LEFT } from '@zos/interaction';
 import { push } from '@zos/router';
-import { vibrate } from '@zos/interaction';
 
 const SCREEN_W = 466;
 const SCREEN_H = 466;
@@ -17,30 +17,8 @@ let balanceLabel    = null;
 let etempTile       = null;
 let batteryTile     = null;
 let balanceTile     = null;
-let engineBtn       = null;
-let alarmBtn        = null;
 
-let currentStatus = null;
-let isLoading     = false;
-
-function setLoading(loading) {
-  isLoading = loading;
-  if (engineBtn) {
-    if (loading) {
-      engineBtn.setProperty(widget.BUTTON, {
-        text: 'Загрузка...',
-        enable: false,
-        normal_color: 0x2a2a2a,
-        press_color:  0x2a2a2a,
-      });
-    } else if (currentStatus) {
-      updateStatusDisplay(currentStatus);
-    } else {
-      engineBtn.setProperty(widget.BUTTON, { enable: true });
-    }
-  }
-  alarmBtn && alarmBtn.setProperty(widget.BUTTON, { enable: !loading });
-}
+let isLoading = false;
 
 // Hides/shows a metric tile: value text + label text
 function setTileVisible(tileRect, valueText, labelText, visible) {
@@ -49,7 +27,7 @@ function setTileVisible(tileRect, valueText, labelText, visible) {
 }
 
 function updateStatusDisplay(status) {
-  currentStatus = status;
+  getApp()._options.globalData.currentStatus = status;
 
   // ── Widget visibility (from settings toggles) ───────────────────────────────
   if (etempTile) {
@@ -86,25 +64,6 @@ function updateStatusDisplay(status) {
     const b = status.balance;
     balanceValue.setProperty(prop.TEXT, (b !== null && b !== undefined) ? b + ' ₽' : '--');
   }
-
-  // ── Engine button ────────────────────────────────────────────────────────────
-  if (engineBtn) {
-    engineBtn.setProperty(widget.BUTTON, {
-      text:         status.engine ? 'Остановить' : 'Запустить',
-      enable:       true,
-      normal_color: status.engine ? 0x8b1a1a : 0x1e8a1e,
-      press_color:  status.engine ? 0x5c1111 : 0x156815,
-    });
-  }
-
-  // ── Alarm button ─────────────────────────────────────────────────────────────
-  if (alarmBtn) {
-    alarmBtn.setProperty(widget.BUTTON, {
-      text:         status.alarm ? 'Снять охрану' : 'Охрана',
-      normal_color: status.alarm ? 0x8b4500 : 0x1a5c8a,
-      press_color:  status.alarm ? 0x5c2e00 : 0x114060,
-    });
-  }
 }
 
 function fetchStatus() {
@@ -118,9 +77,6 @@ function fetchStatus() {
         } else {
           const dbg = res ? ('code=' + res.code) : 'null';
           engineStateText && engineStateText.setProperty(prop.TEXT, dbg);
-          engineBtn && engineBtn.setProperty(widget.BUTTON, {
-            text: 'Повтор', enable: true, normal_color: 0x333333, press_color: 0x222222,
-          });
         }
       } catch (e) {
         engineStateText && engineStateText.setProperty(prop.TEXT,
@@ -131,34 +87,11 @@ function fetchStatus() {
       setLoading(false);
       const msg = (e && e.message) ? e.message.slice(0, 15) : 'timeout';
       engineStateText && engineStateText.setProperty(prop.TEXT, msg);
-      engineBtn && engineBtn.setProperty(widget.BUTTON, {
-        text: 'Повтор', enable: true, normal_color: 0x333333, press_color: 0x222222,
-      });
     });
 }
 
-function sendCommand(cmd, value) {
-  setLoading(true);
-  messageBuilder.request({ cmd, value })
-    .then((res) => {
-      setLoading(false);
-      if (res && res.code === 0) {
-        vibrate({ mode: 0 });
-        updateStatusDisplay(res.data);
-      } else {
-        vibrate({ mode: 1 });
-        engineStateText && engineStateText.setProperty(prop.TEXT, 'Ошибка');
-        if (engineBtn) {
-          engineBtn.setProperty(widget.BUTTON, {
-            text: 'Повтор', enable: true, normal_color: 0x333333, press_color: 0x222222,
-          });
-        }
-      }
-    })
-    .catch(() => {
-      setLoading(false);
-      vibrate({ mode: 1 });
-    });
+function setLoading(loading) {
+  isLoading = loading;
 }
 
 Page({
@@ -173,23 +106,23 @@ Page({
 
     // ── Title ──────────────────────────────────────────────────────────────────
     createWidget(widget.TEXT, {
-      x: 0, y: 16, w: SCREEN_W, h: 36,
+      x: 0, y: 16, w: SCREEN_W, h: 50,
       text: 'StarLine Remote',
-      text_size: 26,
+      text_size: 30,
       color: 0xffffff,
       align_h: align.CENTER_H,
     });
 
     // ── Status bar: Engine | Alarm ─────────────────────────────────────────────
     createWidget(widget.TEXT, {
-      x: 0, y: 56, w: 233, h: 20,
+      x: 0, y: 74, w: 233, h: 22,
       text: 'Двигатель',
       text_size: 16,
       color: 0x555555,
       align_h: align.CENTER_H,
     });
     createWidget(widget.TEXT, {
-      x: 233, y: 56, w: 233, h: 20,
+      x: 233, y: 74, w: 233, h: 22,
       text: 'Охрана',
       text_size: 16,
       color: 0x555555,
@@ -197,136 +130,113 @@ Page({
     });
     // Vertical divider between states
     createWidget(widget.FILL_RECT, {
-      x: 232, y: 56, w: 2, h: 44,
+      x: 232, y: 74, w: 2, h: 52,
       color: 0x2a2a2a,
     });
     engineStateText = createWidget(widget.TEXT, {
-      x: 0, y: 78, w: 233, h: 28,
+      x: 0, y: 98, w: 233, h: 44,
       text: '...',
-      text_size: 22,
+      text_size: 30,
       color: 0x666666,
       align_h: align.CENTER_H,
     });
     alarmStateText = createWidget(widget.TEXT, {
-      x: 233, y: 78, w: 233, h: 28,
+      x: 233, y: 98, w: 233, h: 44,
       text: '...',
-      text_size: 22,
+      text_size: 30,
       color: 0x666666,
       align_h: align.CENTER_H,
     });
 
     // ── Divider ────────────────────────────────────────────────────────────────
     createWidget(widget.FILL_RECT, {
-      x: 40, y: 112, w: SCREEN_W - 80, h: 1,
+      x: 40, y: 154, w: SCREEN_W - 80, h: 1,
       color: 0x2a2a2a,
     });
 
     // ── Metric tile 1: Engine temperature (left) ───────────────────────────────
     etempTile = createWidget(widget.FILL_RECT, {
-      x: 38, y: 118, w: 188, h: 72,
-      color: 0x1e1e1e, radius: 12,
+      x: 20, y: 163, w: 207, h: 126,
+      color: 0x1e1e1e, radius: 16,
     });
     etempValue = createWidget(widget.TEXT, {
-      x: 38, y: 122, w: 188, h: 38,
+      x: 20, y: 177, w: 207, h: 52,
       text: '--',
-      text_size: 28,
+      text_size: 34,
       color: 0xff8833,
       align_h: align.CENTER_H,
     });
     etempLabel = createWidget(widget.TEXT, {
-      x: 38, y: 160, w: 188, h: 24,
+      x: 20, y: 237, w: 207, h: 26,
       text: 'Темп. двиг.',
-      text_size: 17,
+      text_size: 16,
       color: 0x555555,
       align_h: align.CENTER_H,
     });
 
     // ── Metric tile 2: Battery voltage (right) ────────────────────────────────
     batteryTile = createWidget(widget.FILL_RECT, {
-      x: 240, y: 118, w: 188, h: 72,
-      color: 0x1e1e1e, radius: 12,
+      x: 239, y: 163, w: 207, h: 126,
+      color: 0x1e1e1e, radius: 16,
     });
     batteryValue = createWidget(widget.TEXT, {
-      x: 240, y: 122, w: 188, h: 38,
+      x: 239, y: 177, w: 207, h: 52,
       text: '--',
-      text_size: 28,
+      text_size: 34,
       color: 0x4fc3f7,
       align_h: align.CENTER_H,
     });
     batteryLabel = createWidget(widget.TEXT, {
-      x: 240, y: 160, w: 188, h: 24,
+      x: 239, y: 237, w: 207, h: 26,
       text: 'АКБ',
-      text_size: 17,
+      text_size: 16,
       color: 0x555555,
       align_h: align.CENTER_H,
     });
 
     // ── Metric tile 3: SIM balance (full width) ───────────────────────────────
     balanceTile = createWidget(widget.FILL_RECT, {
-      x: 38, y: 197, w: 390, h: 54,
-      color: 0x1e1e1e, radius: 12,
+      x: 20, y: 301, w: 426, h: 128,
+      color: 0x1e1e1e, radius: 16,
     });
     balanceValue = createWidget(widget.TEXT, {
-      x: 38, y: 200, w: 240, h: 44,
+      x: 20, y: 322, w: 426, h: 52,
       text: '--',
-      text_size: 26,
+      text_size: 34,
       color: 0x7ec87e,
       align_h: align.CENTER_H,
     });
     balanceLabel = createWidget(widget.TEXT, {
-      x: 278, y: 211, w: 150, h: 24,
+      x: 20, y: 380, w: 426, h: 26,
       text: 'Баланс SIM',
-      text_size: 17,
+      text_size: 16,
       color: 0x555555,
-      align_h: align.LEFT,
+      align_h: align.CENTER_H,
     });
 
-    // ── Engine start/stop button ───────────────────────────────────────────────
-    engineBtn = createWidget(widget.BUTTON, {
-      x: 40, y: 264, w: SCREEN_W - 80, h: 56,
-      text: 'Запустить',
-      text_size: 24,
-      normal_color: 0x1e8a1e,
-      press_color:  0x156815,
-      radius: 28,
-      click_func: () => {
-        if (isLoading) return;
-        if (!currentStatus || !currentStatus.engine) {
-          const gd = getApp()._options.globalData;
-          gd.pendingAction = 'r_start';
-          gd.mainPage = { sendCommand };
-          push({ url: 'device-app/pages/confirm' });
-        } else {
-          sendCommand('r_start', 0);
+    // ── Hint arrow (swipe left for controls) ──────────────────────────────────
+    createWidget(widget.TEXT, {
+      x: 0, y: 441, w: SCREEN_W, h: 22,
+      text: '›',
+      text_size: 22,
+      color: 0x333333,
+      align_h: align.CENTER_H,
+    });
+
+    // ── Gesture: swipe left → actions screen ──────────────────────────────────
+    onGesture({
+      callback: (g) => {
+        if (g === GESTURE_LEFT) {
+          push({ url: 'device-app/pages/actions' });
         }
       },
     });
 
-    // ── Alarm toggle button ────────────────────────────────────────────────────
-    alarmBtn = createWidget(widget.BUTTON, {
-      x: 40, y: 330, w: SCREEN_W - 80, h: 46,
-      text: 'Охрана',
-      text_size: 20,
-      normal_color: 0x1a5c8a,
-      press_color:  0x114060,
-      radius: 23,
-      click_func: () => {
-        if (isLoading) return;
-        sendCommand('alarm', (currentStatus && currentStatus.alarm) ? 0 : 1);
-      },
-    });
-
-    // ── Refresh button ────────────────────────────────────────────────────────
-    createWidget(widget.BUTTON, {
-      x: 163, y: 404, w: 140, h: 42,
-      text: 'Обновить',
-      text_size: 20,
-      normal_color: 0x333333,
-      press_color:  0x222222,
-      radius: 21,
-      click_func: () => { if (!isLoading) fetchStatus(); },
-    });
-
     fetchStatus();
+  },
+
+  onResume() {
+    const s = getApp()._options.globalData.currentStatus;
+    if (s) updateStatusDisplay(s);
   },
 });
