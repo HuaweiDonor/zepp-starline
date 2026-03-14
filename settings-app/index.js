@@ -122,6 +122,10 @@ AppSettingsPage({
       border: '1px solid #2a2a2a',
       width: 'auto',
     };
+    const counterText = {
+      fontSize: '12px', color: '#888888',
+      textAlign: 'right', padding: '0 20px 6px',
+    };
 
     // ─── Helper: input field ──────────────────────────────────────────────────
     const Field = (label, key, placeholder) =>
@@ -134,15 +138,31 @@ AppSettingsPage({
         }),
       ]);
 
-    // ─── Helper: toggle row ───────────────────────────────────────────────────
-    const ToggleRow = (label, key) => {
-      const stored = storage.getItem(key);
-      const isOn = stored === null ? true : stored === 'true';
+    // ─── Helpers: widget multi-select (max 3) ────────────────────────────────────
+    const getActiveWidgets = () => {
+      try {
+        const raw = storage.getItem('active_widgets');
+        return raw ? JSON.parse(raw) : ['etemp', 'battery', 'balance'];
+      } catch (e) { return ['etemp', 'battery', 'balance']; }
+    };
+
+    const WidgetToggle = (label, widgetId) => {
+      const active = getActiveWidgets();
+      const isOn = active.includes(widgetId);
       return View({ style: toggleRow }, [
         View({ style: toggleLabel }, [label]),
         Toggle({
           value: isOn,
-          onChange: (val) => { storage.setItem(key, val ? 'true' : 'false'); },
+          onChange: (val) => {
+            const current = getActiveWidgets();
+            if (val) {
+              if (current.length >= 3) return; // silently enforce max
+              storage.setItem('active_widgets', JSON.stringify([...current, widgetId]));
+            } else {
+              storage.setItem('active_widgets',
+                JSON.stringify(current.filter(w => w !== widgetId)));
+            }
+          },
         }),
       ]);
     };
@@ -228,9 +248,12 @@ AppSettingsPage({
       Field('Время прогрева (мин)', 'warmup_time', '10'),
 
       View({ style: sectionLabel }, ['Виджеты на часах']),
-      ToggleRow('Температура двигателя', 'show_etemp'),
-      ToggleRow('Напряжение АКБ', 'show_battery'),
-      ToggleRow('Баланс SIM-карты', 'show_balance'),
+      View({ style: counterText }, ['Активно: ' + getActiveWidgets().length + '/3']),
+      WidgetToggle('Температура двигателя', 'etemp'),
+      WidgetToggle('Температура в салоне',  'ctemp'),
+      WidgetToggle('Напряжение АКБ',        'battery'),
+      WidgetToggle('Баланс СИМ-карты',      'balance'),
+      WidgetToggle('Уровень топлива %',     'fuel'),
 
       ...logSection,
     ]);

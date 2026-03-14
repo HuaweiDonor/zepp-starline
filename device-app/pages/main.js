@@ -8,62 +8,64 @@ const { messageBuilder } = getApp()._options.globalData;
 
 let engineStateText = null;
 let alarmStateText  = null;
-let etempValue      = null;
-let etempLabel      = null;
-let batteryValue    = null;
-let batteryLabel    = null;
-let balanceValue    = null;
-let balanceLabel    = null;
-let etempTile       = null;
-let batteryTile     = null;
-let balanceTile     = null;
 
 let isLoading = false;
 
-// Hides/shows a metric tile: value text + label text
-function setTileVisible(tileRect, valueText, labelText, visible) {
-  valueText.setProperty(prop.VISIBLE, visible);
-  labelText.setProperty(prop.VISIBLE, visible);
-}
+const WIDGET_DEFS = {
+  etemp:   { label: 'Темп. двиг.',  color: 0xff8833, fmt: v => v != null ? v + '°C'              : '--' },
+  ctemp:   { label: 'Темп. салона', color: 0x80cbc4, fmt: v => v != null ? v + '°C'              : '--' },
+  battery: { label: 'АКБ',          color: 0x4fc3f7, fmt: v => v != null ? (+v).toFixed(1) + 'В' : '--' },
+  balance: { label: 'Баланс SIM',   color: 0x7ec87e, fmt: v => v != null ? v + ' ₽'             : '--' },
+  fuel:    { label: 'Топливо',      color: 0xffcc44, fmt: v => v != null ? v + '%'              : '--' },
+};
+
+const SLOT_LAYOUTS = [
+  { x: 20,  y: 163, w: 207, h: 126 },  // Slot A — left-half
+  { x: 239, y: 163, w: 207, h: 126 },  // Slot B — right-half
+  { x: 20,  y: 301, w: 426, h: 128 },  // Slot C — full-bottom
+];
+
+const slots = [
+  { bg: null, valueText: null, labelText: null },
+  { bg: null, valueText: null, labelText: null },
+  { bg: null, valueText: null, labelText: null },
+];
 
 function updateStatusDisplay(status) {
   getApp()._options.globalData.currentStatus = status;
 
-  // ── Widget visibility (from settings toggles) ───────────────────────────────
-  if (etempTile) {
-    const show = status.show_etemp !== false;
-    setTileVisible(etempTile, etempValue, etempLabel, show);
-  }
-  if (batteryTile) {
-    const show = status.show_battery !== false;
-    setTileVisible(batteryTile, batteryValue, batteryLabel, show);
-  }
-  if (balanceTile) {
-    const show = status.show_balance !== false;
-    setTileVisible(balanceTile, balanceValue, balanceLabel, show);
+  // ── Optional metric slots ────────────────────────────────────────────────────
+  const activeWidgets = Array.isArray(status.active_widgets) && status.active_widgets.length
+    ? status.active_widgets
+    : ['etemp', 'battery', 'balance'];
+
+  for (let i = 0; i < 3; i++) {
+    const slot = slots[i];
+    if (!slot.valueText) continue;
+    if (i < activeWidgets.length) {
+      const def = WIDGET_DEFS[activeWidgets[i]];
+      if (!def) {
+        slot.bg.setProperty(prop.VISIBLE,        false);
+        slot.valueText.setProperty(prop.VISIBLE, false);
+        slot.labelText.setProperty(prop.VISIBLE, false);
+        continue;
+      }
+      slot.valueText.setProperty(prop.TEXT,    def.fmt(status[activeWidgets[i]]));
+      slot.valueText.setProperty(prop.COLOR,   def.color);
+      slot.labelText.setProperty(prop.TEXT,    def.label);
+      slot.bg.setProperty(prop.VISIBLE,        true);
+      slot.valueText.setProperty(prop.VISIBLE, true);
+      slot.labelText.setProperty(prop.VISIBLE, true);
+    } else {
+      slot.bg.setProperty(prop.VISIBLE,        false);
+      slot.valueText.setProperty(prop.VISIBLE, false);
+      slot.labelText.setProperty(prop.VISIBLE, false);
+    }
   }
 
-  // ── Engine/alarm state ──────────────────────────────────────────────────────
-  if (engineStateText) {
-    engineStateText.setProperty(prop.TEXT, status.engine ? 'РАБОТАЕТ' : 'Выкл');
-  }
-  if (alarmStateText) {
-    alarmStateText.setProperty(prop.TEXT, status.alarm ? 'ОХРАНА' : 'Снята');
-  }
-
-  // ── Metrics ─────────────────────────────────────────────────────────────────
-  if (etempValue) {
-    const t = status.etemp;
-    etempValue.setProperty(prop.TEXT, (t !== null && t !== undefined) ? t + '°C' : '--');
-  }
-  if (batteryValue) {
-    const v = status.battery;
-    batteryValue.setProperty(prop.TEXT, (v !== null && v !== undefined) ? (+v).toFixed(1) + 'В' : '--');
-  }
-  if (balanceValue) {
-    const b = status.balance;
-    balanceValue.setProperty(prop.TEXT, (b !== null && b !== undefined) ? b + ' ₽' : '--');
-  }
+  // ── Engine / alarm status (always shown) ────────────────────────────────────
+  if (engineStateText) engineStateText.setProperty(prop.TEXT, status.engine ? 'РАБОТАЕТ' : 'Выкл');
+  if (alarmStateText)  alarmStateText.setProperty(prop.TEXT,  status.alarm  ? 'ОХРАНА'   : 'Снята');
 }
 
 function fetchStatus() {
@@ -156,65 +158,23 @@ Page({
       color: 0x2a2a2a,
     });
 
-    // ── Metric tile 1: Engine temperature (left) ───────────────────────────────
-    etempTile = createWidget(widget.FILL_RECT, {
-      x: 20, y: 163, w: 207, h: 126,
-      color: 0x1e1e1e, radius: 16,
-    });
-    etempValue = createWidget(widget.TEXT, {
-      x: 20, y: 177, w: 207, h: 52,
-      text: '--',
-      text_size: 34,
-      color: 0xff8833,
-      align_h: align.CENTER_H,
-    });
-    etempLabel = createWidget(widget.TEXT, {
-      x: 20, y: 237, w: 207, h: 26,
-      text: 'Темп. двиг.',
-      text_size: 16,
-      color: 0x555555,
-      align_h: align.CENTER_H,
-    });
-
-    // ── Metric tile 2: Battery voltage (right) ────────────────────────────────
-    batteryTile = createWidget(widget.FILL_RECT, {
-      x: 239, y: 163, w: 207, h: 126,
-      color: 0x1e1e1e, radius: 16,
-    });
-    batteryValue = createWidget(widget.TEXT, {
-      x: 239, y: 177, w: 207, h: 52,
-      text: '--',
-      text_size: 34,
-      color: 0x4fc3f7,
-      align_h: align.CENTER_H,
-    });
-    batteryLabel = createWidget(widget.TEXT, {
-      x: 239, y: 237, w: 207, h: 26,
-      text: 'АКБ',
-      text_size: 16,
-      color: 0x555555,
-      align_h: align.CENTER_H,
-    });
-
-    // ── Metric tile 3: SIM balance (full width) ───────────────────────────────
-    balanceTile = createWidget(widget.FILL_RECT, {
-      x: 20, y: 301, w: 426, h: 128,
-      color: 0x1e1e1e, radius: 16,
-    });
-    balanceValue = createWidget(widget.TEXT, {
-      x: 20, y: 322, w: 426, h: 52,
-      text: '--',
-      text_size: 34,
-      color: 0x7ec87e,
-      align_h: align.CENTER_H,
-    });
-    balanceLabel = createWidget(widget.TEXT, {
-      x: 20, y: 380, w: 426, h: 26,
-      text: 'Баланс SIM',
-      text_size: 16,
-      color: 0x555555,
-      align_h: align.CENTER_H,
-    });
+    // ── Metric slots ─────────────────────────────────────────────────────────────
+    for (let i = 0; i < 3; i++) {
+      const L = SLOT_LAYOUTS[i];
+      slots[i].bg = createWidget(widget.FILL_RECT, {
+        x: L.x, y: L.y, w: L.w, h: L.h, color: 0x1e1e1e, radius: 16,
+      });
+      slots[i].valueText = createWidget(widget.TEXT, {
+        x: L.x, y: L.y + 14, w: L.w, h: 52,
+        text: '--', text_size: 34, color: 0xffffff, align_h: align.CENTER_H,
+      });
+      slots[i].labelText = createWidget(widget.TEXT, {
+        x: L.x, y: L.y + 74, w: L.w, h: 26,
+        text: '', text_size: 16, color: 0x555555, align_h: align.CENTER_H,
+      });
+      slots[i].valueText.setProperty(prop.VISIBLE, false);
+      slots[i].labelText.setProperty(prop.VISIBLE, false);
+    }
 
     // ── Hint arrow (swipe left for controls) ──────────────────────────────────
     createWidget(widget.TEXT, {

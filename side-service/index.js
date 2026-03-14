@@ -419,6 +419,7 @@ async function getDeviceStatus() {
   const d      = res.data  || {};
   const common = d.common  || {};
   const state  = d.state   || {};
+  const obd    = d.obd     || {};
 
   // balance is an array; pick the active SIM entry
   let balance = null;
@@ -434,10 +435,7 @@ async function getDeviceStatus() {
     ctemp:   common.ctemp   !== undefined ? common.ctemp   : null,
     battery: common.battery !== undefined ? common.battery : null,
     balance,
-    // widget visibility flags — compare to boolean false (getSetting returns boolean via JSON.parse)
-    show_etemp:   getSetting('show_etemp')   !== false,
-    show_battery: getSetting('show_battery') !== false,
-    show_balance: getSetting('show_balance') !== false,
+    fuel: obd.fuel_percent !== undefined ? obd.fuel_percent : null,
   };
   lastStatusTime = now;
   return cachedStatus;
@@ -562,13 +560,21 @@ AppSideService({
         switch (cmd) {
           case 'get_status': {
             const status = await getDeviceStatus();
-            ctx.response({ data: { code: 0, data: status } });
+            const activeWidgetsVal = getSetting('active_widgets');
+            const active_widgets = Array.isArray(activeWidgetsVal)
+              ? activeWidgetsVal.slice(0, 3)
+              : ['etemp', 'battery', 'balance'];
+            ctx.response({ data: { code: 0, data: { ...status, active_widgets } } });
             break;
           }
           case 'r_start':
           case 'alarm': {
             const status = await sendDeviceCommand(cmd, value);
-            ctx.response({ data: { code: 0, data: status } });
+            const activeWidgetsVal = getSetting('active_widgets');
+            const active_widgets = Array.isArray(activeWidgetsVal)
+              ? activeWidgetsVal.slice(0, 3)
+              : ['etemp', 'battery', 'balance'];
+            ctx.response({ data: { code: 0, data: { ...status, active_widgets } } });
             break;
           }
           default:
