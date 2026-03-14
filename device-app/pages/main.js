@@ -75,7 +75,9 @@ function fetchStatus() {
         if (res && res.code === 0) {
           updateStatusDisplay(res.data);
         } else {
-          const dbg = res ? ('code=' + res.code) : 'null';
+          const dbg = res
+            ? (res.message ? res.message.slice(0, 20) : 'code=' + res.code)
+            : 'null';
           engineStateText && engineStateText.setProperty(prop.TEXT, dbg);
         }
       } catch (e) {
@@ -227,7 +229,7 @@ Page({
     onGesture({
       callback: (g) => {
         if (g === GESTURE_LEFT) {
-          push({ url: 'device-app/pages/actions' });
+          push({ url: 'device-app/pages/actions_engine' });
         }
       },
     });

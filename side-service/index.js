@@ -428,8 +428,8 @@ async function getDeviceStatus() {
   }
 
   cachedStatus = {
-    engine:  !!state.r_start,  // remote start active
-    alarm:   !!state.arm,       // охрана active
+    engine:  state.ign == 1 || state.r_start == 1,  // key ignition or remote start
+    alarm:   state.arm == 1,       // охрана active ("1" or 1)
     etemp:   common.etemp   !== undefined ? common.etemp   : null,
     ctemp:   common.ctemp   !== undefined ? common.ctemp   : null,
     battery: common.battery !== undefined ? common.battery : null,
