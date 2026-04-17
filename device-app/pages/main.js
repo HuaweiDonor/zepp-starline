@@ -9,7 +9,11 @@ const { messageBuilder } = getApp()._options.globalData;
 let engineStateText = null;
 let alarmStateText  = null;
 
-let isLoading = false;
+let isLoading       = false;
+let loadingTrackArc = null;
+let loadingArc      = null;
+let loadingText     = null;
+let loadingIv       = null;
 
 const WIDGET_DEFS = {
   etemp:   { label: 'Темп. двиг.',  color: 0xff8833, fmt: v => v != null ? v + '°C'              : '--' },
@@ -96,6 +100,24 @@ function fetchStatus() {
 
 function setLoading(loading) {
   isLoading = loading;
+  if (loading) {
+    if (loadingTrackArc) loadingTrackArc.setProperty(prop.VISIBLE, true);
+    if (loadingArc)      loadingArc.setProperty(prop.VISIBLE, true);
+    if (loadingText)     loadingText.setProperty(prop.VISIBLE, true);
+    let angle = -90;
+    loadingIv = setInterval(() => {
+      angle = (angle + 12) % 360;
+      if (loadingArc) loadingArc.setProperty(prop.MORE, {
+        start_angle: angle,
+        end_angle:   angle + 120,
+      });
+    }, 50);
+  } else {
+    if (loadingIv) { clearInterval(loadingIv); loadingIv = null; }
+    if (loadingArc)      loadingArc.setProperty(prop.VISIBLE, false);
+    if (loadingTrackArc) loadingTrackArc.setProperty(prop.VISIBLE, false);
+    if (loadingText)     loadingText.setProperty(prop.VISIBLE, false);
+  }
 }
 
 Page({
@@ -175,6 +197,26 @@ Page({
       slots[i].valueText.setProperty(prop.VISIBLE, false);
       slots[i].labelText.setProperty(prop.VISIBLE, false);
     }
+
+    // ── Loading spinner (center of metrics area) ──────────────────────────
+    loadingTrackArc = createWidget(widget.ARC, {
+      x: 153, y: 213, w: 160, h: 160,
+      start_angle: -90, end_angle: 270,
+      color: 0x222222, line_width: 8,
+    });
+    loadingArc = createWidget(widget.ARC, {
+      x: 153, y: 213, w: 160, h: 160,
+      start_angle: -90, end_angle: 30,
+      color: 0x4fc3f7, line_width: 8,
+    });
+    loadingText = createWidget(widget.TEXT, {
+      x: 153, y: 276, w: 160, h: 34,
+      text: 'Загрузка...', text_size: 18,
+      color: 0x666666, align_h: align.CENTER_H,
+    });
+    loadingTrackArc.setProperty(prop.VISIBLE, false);
+    loadingArc.setProperty(prop.VISIBLE, false);
+    loadingText.setProperty(prop.VISIBLE, false);
 
     // ── Hint arrow (swipe left for controls) ──────────────────────────────────
     createWidget(widget.TEXT, {

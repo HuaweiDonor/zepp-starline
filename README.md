@@ -134,7 +134,35 @@ npm run preview
 | — | Нажать **«Войти и получить список устройств»** |
 | ID устройства | Нажать **«Копировать»** рядом с нужным устройством — ID вставится автоматически |
 | Время прогрева | Таймер прогрева в минутах (по умолчанию 10) |
-| Виджеты | Включить/выключить отображение температуры, АКБ, баланса |
+| Температура двигателя | Показывать/скрывать виджет температуры двигателя |
+| Напряжение АКБ | Показывать/скрывать виджет АКБ |
+| Баланс SIM-карты | Показывать/скрывать виджет баланса |
+
+> **Zepp 10.2.0+:** если страница настроек открывается пустой — см. раздел [Workaround для Zepp 10.2.0](#workaround-для-zepp-1020) ниже.
+
+---
+
+## Workaround для Zepp 10.2.0
+
+В Zepp App версии 10.2.0 был сломан внутренний мост `__webview_comms__`, из-за чего страница настроек любого стороннего приложения открывается **пустой**. Это регрессия на стороне Zepp — обходится инъекцией полифила через Chrome DevTools Protocol (CDP).
+
+**Требования:** USB-кабель, включённая отладка по USB на телефоне, `node` в PATH.
+
+```bash
+# 1. Открыть Zepp App → StarLine Remote → иконка настроек (шестерёнка)
+# 2. В терминале на компьютере:
+./fix-settings.sh
+# 3. Держать терминал открытым, пока настраиваете
+# 4. Ctrl+C по завершении
+```
+
+Скрипт:
+- форвардит CDP-порт процесса Zepp через ADB
+- инжектирует полифил `__webview_comms__` через `Page.addScriptToEvaluateOnNewDocument`
+- перехватывает и обслуживает из кэша фреймворк Zepp Settings (~709 КБ, скачивается один раз)
+- перезагружает страницу настроек
+
+После первого запуска фреймворк кешируется в `/tmp/app-settings-framework.js` — повторные запуски работают без сети.
 
 ---
 
@@ -177,6 +205,7 @@ starline-zepp/
 │   ├── watch_01.jpg                # Скриншот: главный экран (статус + метрики)
 │   ├── watch_02.jpg                # Скриншот: экран управления (кнопки hold)
 │   └── phone.jpg                   # Скриншот: настройки в Zepp App
+├── fix-settings.sh                 # Workaround Zepp 10.2.0: CDP-инъекция полифила настроек
 ├── scripts/
 │   └── make_icons.py               # Генерация иконок кнопок (PNG 120×120)
 └── .github/workflows/
@@ -318,6 +347,28 @@ textWidget.setProperty(prop.VISIBLE, false);
 // ✅ Для BUTTON объектный синтаксис работает корректно
 buttonWidget.setProperty(widget.BUTTON, { text: 'Click', normal_color: 0x1e8a1e });
 ```
+
+**События кнопок: `event.CLICK_DOWN` — константа, не строка**
+
+В Zepp OS `addEventListener` принимает **числовую константу** из `event`, а не строку. Передача `'click_down'` регистрирует обработчик для несуществующего типа события — кнопка молча не реагирует:
+
+```js
+// ❌ Не работает — 'click_down' это строка, не числовой тип события
+import { createWidget, widget, prop } from '@zos/ui';
+btn.addEventListener('click_down', handler); // никогда не сработает
+btn.addEventListener('click_up',   handler);
+
+// ✅ Правильно — event.CLICK_DOWN это числовая константа (~2)
+import { createWidget, widget, prop, event } from '@zos/ui';
+btn.addEventListener(event.CLICK_DOWN, handler);
+btn.addEventListener(event.CLICK_UP,   handler);
+```
+
+**Zepp 10.2.0 — регрессия `__webview_comms__`**
+
+Начиная с Zepp App 10.2.0 внутренний мост `__webview_comms__` удалён из WebView настроек. Любая страница Settings App открывается пустой — без ошибок в логе.
+
+Обход: `fix-settings.sh` — инжектирует полифил `__webview_comms__` через Chrome DevTools Protocol (ADB). Подробнее в разделе [Workaround для Zepp 10.2.0](#workaround-для-zepp-1020).
 
 **JSON.parse и строковые настройки**
 

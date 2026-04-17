@@ -1,4 +1,4 @@
-import { createWidget, widget, prop, align } from '@zos/ui';
+import { createWidget, widget, prop, align, event } from '@zos/ui';
 import { vibrate, onGesture, GESTURE_LEFT, GESTURE_RIGHT } from '@zos/interaction';
 import { push, pop } from '@zos/router';
 
@@ -92,14 +92,14 @@ Page({
       press_src:  'btn_engine_off.png',
     });
 
-    btn.addEventListener('click_down', () => {
+    btn.addEventListener(event.CLICK_DOWN, () => {
       if (isLoading || Date.now() - lastCommandTime < COOLDOWN_MS) { vibrate({ mode: 1 }); return; }
       startHold(() => {
         const s = getApp()._options.globalData.currentStatus;
         sendCommand('r_start', (s && s.engine) ? 0 : 1);
       });
     });
-    btn.addEventListener('click_up', () => cancelHold());
+    btn.addEventListener(event.CLICK_UP, () => cancelHold());
 
     createWidget(widget.TEXT, {
       x: 0, y: 350, w: 466, h: 30,

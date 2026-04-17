@@ -5,8 +5,8 @@
     "appName": "StarLine Remote",
     "appType": "app",
     "version": {
-      "code": 3,
-      "name": "1.2.0"
+      "code": 6,
+      "name": "1.3.2"
     },
     "vender": "HuaweiDonor",
     "description": "Remote start and security control for StarLine S96/S9 alarms",

@@ -88,27 +88,6 @@ AppSettingsPage({
       lineHeight: '1.9',
       whiteSpace: 'pre-wrap',
       fontFamily: 'monospace',
-      overflowX: 'hidden',
-      wordBreak: 'break-all',
-      maxHeight: '240px',
-      overflowY: 'auto',
-    };
-    const deviceRow = {
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '8px 0',
-      borderBottom: '1px solid #1e3a1e',
-    };
-    const copyBtn = {
-      background: '#1a3a1a',
-      color: '#7ec87e',
-      fontSize: '12px',
-      fontWeight: '600',
-      borderRadius: '8px',
-      padding: '8px 12px',
-      border: '1px solid #2a5a2a',
     };
     const clearBtn = {
       display: 'block',
@@ -122,10 +101,6 @@ AppSettingsPage({
       border: '1px solid #2a2a2a',
       width: 'auto',
     };
-    const counterText = {
-      fontSize: '12px', color: '#888888',
-      textAlign: 'right', padding: '0 20px 6px',
-    };
 
     // ─── Helper: input field ──────────────────────────────────────────────────
     const Field = (label, key, placeholder) =>
@@ -138,31 +113,15 @@ AppSettingsPage({
         }),
       ]);
 
-    // ─── Helpers: widget multi-select (max 3) ────────────────────────────────────
-    const getActiveWidgets = () => {
-      try {
-        const raw = storage.getItem('active_widgets');
-        return raw ? JSON.parse(raw) : ['etemp', 'battery', 'balance'];
-      } catch (e) { return ['etemp', 'battery', 'balance']; }
-    };
-
-    const WidgetToggle = (label, widgetId) => {
-      const active = getActiveWidgets();
-      const isOn = active.includes(widgetId);
+    // ─── Helper: toggle row ───────────────────────────────────────────────────
+    const ToggleRow = (label, key) => {
+      const stored = storage.getItem(key);
+      const isOn = stored === null ? true : stored === 'true';
       return View({ style: toggleRow }, [
         View({ style: toggleLabel }, [label]),
         Toggle({
           value: isOn,
-          onChange: (val) => {
-            const current = getActiveWidgets();
-            if (val) {
-              if (current.length >= 3) return; // silently enforce max
-              storage.setItem('active_widgets', JSON.stringify([...current, widgetId]));
-            } else {
-              storage.setItem('active_widgets',
-                JSON.stringify(current.filter(w => w !== widgetId)));
-            }
-          },
+          onChange: (val) => { storage.setItem(key, val ? 'true' : 'false'); },
         }),
       ]);
     };
@@ -173,26 +132,13 @@ AppSettingsPage({
     if (rawList) {
       try {
         const devices = JSON.parse(rawList);
-        if (devices && devices.length) {
+        const text = devices
+          .map(d => (d.alias || d.name || 'Устройство') + '  —  ID: ' + d.device_id)
+          .join('\n');
+        if (text) {
           deviceListSection = [
             View({ style: sectionLabel }, ['Найденные устройства']),
-            View({ style: deviceBox }, [
-              ...devices.map(d =>
-                View({ style: deviceRow }, [
-                  View({ style: { flex: '1', fontSize: '13px', color: '#7ec87e' } }, [
-                    (d.alias || d.name || 'Устройство') + '\nID: ' + d.device_id
-                  ]),
-                  Button({
-                    label: 'Копировать',
-                    style: copyBtn,
-                    onClick: () => {
-                      try { navigator.clipboard.writeText(String(d.device_id)); } catch(e) {}
-                      storage.setItem('device_id', String(d.device_id));
-                    }
-                  })
-                ])
-              )
-            ]),
+            View({ style: deviceBox }, [text]),
           ];
         }
       } catch (e) {}
@@ -248,12 +194,9 @@ AppSettingsPage({
       Field('Время прогрева (мин)', 'warmup_time', '10'),
 
       View({ style: sectionLabel }, ['Виджеты на часах']),
-      View({ style: counterText }, ['Активно: ' + getActiveWidgets().length + '/3']),
-      WidgetToggle('Температура двигателя', 'etemp'),
-      WidgetToggle('Температура в салоне',  'ctemp'),
-      WidgetToggle('Напряжение АКБ',        'battery'),
-      WidgetToggle('Баланс СИМ-карты',      'balance'),
-      WidgetToggle('Уровень топлива %',     'fuel'),
+      ToggleRow('Температура двигателя', 'show_etemp'),
+      ToggleRow('Напряжение АКБ', 'show_battery'),
+      ToggleRow('Баланс SIM-карты', 'show_balance'),
 
       ...logSection,
     ]);
